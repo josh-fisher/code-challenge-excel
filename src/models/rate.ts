@@ -1,4 +1,4 @@
-import { Model, DataTypes, Sequelize } from 'sequelize';
+import { Model, DataTypes, Sequelize, BuildOptions } from 'sequelize';
 
 export interface RateAttributes {
   id: number;
@@ -22,12 +22,17 @@ export class Rate extends Model<RateAttributes> implements RateAttributes {
   public locale!: string | null;
 }
 
+export interface RateInstance extends Model<RateAttributes>, RateAttributes {}
+type RateModelStatic = typeof Model & {
+  new <T>(values?: T, options?: BuildOptions): RateInstance;
+};
+
 /**
  * Builds a sequelize Rate object to interact with the db.
  * @param sequelize
  * @returns {Rate} The static Rate class to interact with sequelize
  */
-export const RateFactory = (sequelize: Sequelize): any => {
+export const RateFactory = (sequelize: Sequelize): RateModelStatic => {
   return sequelize.define(
     'Rate',
     {

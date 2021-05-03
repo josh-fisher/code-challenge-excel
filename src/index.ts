@@ -2,9 +2,19 @@ import db from './db';
 import exporter from './exporter';
 import { Rate } from './models/rate';
 
+interface SheetRow {
+  startWeight: string;
+  endWeight: number;
+  zones: {
+    [name: string]: number;
+  };
+}
+interface Sheet {
+  [name: string]: SheetRow;
+}
 export interface SheetData {
   name: string;
-  rows: any[][];
+  rows: (string | number)[][];
 }
 
 /**
@@ -19,7 +29,7 @@ const getSheetNames = async (): Promise<string[]> => {
     group: ['locale', 'shipping_speed'],
   });
 
-  const sheetNames = rates.reduce((names: any[], rate: any) => {
+  const sheetNames = rates.reduce((names: string[], rate: Rate) => {
     const locale = rate.getDataValue('locale');
     const speed = rate.getDataValue('shipping_speed');
     const sheetName = `${locale},${speed}`;
@@ -32,25 +42,25 @@ const getSheetNames = async (): Promise<string[]> => {
 /**
  * Formats the data into array data in the form of [column][row]
  * @param rates The queried results of rates
- * @returns { any[][] } formattedRowDate in the form of [column][row]
+ * @returns { (string | number)[][] } formattedRowDate in the form of [column][row]
  */
-const formatRowData = (rates: Rate[]): any[][] => {
+const formatRowData = (rates: Rate[]): (string | number)[][] => {
   const headers = ['Start Weight', 'End Weight'];
 
-  const reducedRows = rates.reduce((rowsAcc: any, rate: Rate) => {
+  const reducedRows = rates.reduce((rowsAcc: Sheet, rate: Rate) => {
     const zone = rate.getDataValue('zone');
     const startWeight = rate.getDataValue('start_weight') ?? '0';
-    const endWeight = rate.getDataValue('end_weight');
-    const rateValue = rate.getDataValue('rate');
+    const endWeight = rate.getDataValue('end_weight') ?? 0;
+    const rateValue = rate.getDataValue('rate') ?? 0;
     const formattedZone = `Zone ${zone}`;
 
     if (!headers.includes(formattedZone)) {
       headers.push(formattedZone);
     }
 
-    const existingRow: any = rowsAcc[startWeight];
+    const existingRow: SheetRow = rowsAcc[startWeight];
     if (!existingRow) {
-      const row: any = {
+      const row: SheetRow = {
         startWeight,
         endWeight,
         zones: {},
@@ -68,7 +78,7 @@ const formatRowData = (rates: Rate[]): any[][] => {
     return rowsAcc;
   }, {});
 
-  const rows = Object.values(reducedRows).map((row: any) => {
+  const rows = Object.values(reducedRows).map((row: SheetRow) => {
     const data = [row.startWeight, row.endWeight];
     const zoneValues = Object.values(row.zones);
     zoneValues.forEach((zone) => {
@@ -116,14 +126,9 @@ const sheetData = async (sheetName: string): Promise<SheetData> => {
  */
 const run = async (): Promise<void> => {
   const sheetNames = await getSheetNames();
-
-  const promises = [];
-  for (let index = 0; index < sheetNames.length; index++) {
-    const sheetName = sheetNames[index];
-    promises.push(sheetData(sheetName));
-  }
-
+  const promises = sheetNames.map(async (sheetName: string) => await sheetData(sheetName));
   const sheetsData = await Promise.all(promises);
+
   await exporter.xlxs(sheetsData, 'xlsx');
 };
 
